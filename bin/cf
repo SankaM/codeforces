@@ -1,0 +1,301 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TEMPLATE="$ROOT/templates/Main.java.tpl"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  cf init <contest> <problem>          Create contests/<contest>/<problem>/ with Main.java + samples/.
+  cf use <contest> <problem>           Point IntelliJ Gradle (gradle.properties cf.problem.dir) at one problem folder.
+  cf run [--all] [<contest> <problem>] Compile Main.java; run stdin from samples/*.in.
+  cf path <contest> <problem>          Print absolute path to submission Main.java.
+  cf list                              Tree of contests/*/ */Main.java paths.
+
+Contest: round id (2072), gym id, or a slug folder name (edu-169-abc).
+Problem: A,B,C,... (case-insensitive).
+
+Tips:
+  - Gradle/IntelliJ only compile one folder at a time — run ./bin/cf use … when you switch problems (init does use automatically).
+  - Paste samples into samples/*.in (+ optional matching *.out for diff).
+  - From a problem directory, omit <contest> <problem>; cf infers cwd.
+  - Submission on site: paste/upload Main.java (no package line, class Main).
+
+Examples:
+  bin/cf init 2072 A                  # also runs: bin/cf use 2072 A
+  bin/cf use 2072 B
+  cd contests/2072/A && ../../../bin/cf run --all
+EOF
+}
+
+gradle_property_set() {
+  local key="$1" val="$2"
+  local file="$ROOT/gradle.properties"
+  local tmp
+  touch "$file"
+  tmp="$(mktemp)"
+  awk -v key="$key" -v val="$val" '
+    function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+    BEGIN { done = 0 }
+    {
+      if ($0 ~ /^[[:space:]]*#/ || trim($0) == "") { print; next }
+      eq = index($0, "=")
+      if (eq == 0) { print; next }
+      k = trim(substr($0, 1, eq - 1))
+      if (k == key) { print key "=" val; done = 1; next }
+      print
+    }
+    END { if (!done) print key "=" val }
+  ' "$file" >"$tmp"
+  mv "$tmp" "$file"
+}
+
+cmd_use() {
+  local contest problem rel
+  contest="${1:?contest}"
+  problem="$(norm_problem "${2:?problem}")"
+  rel="contests/$contest/$problem"
+  [[ -f "$ROOT/$rel/Main.java" ]] || {
+    echo "error: missing $ROOT/$rel/Main.java" >&2
+    exit 1
+  }
+  gradle_property_set "cf.problem.dir" "$rel"
+  printf 'active for IntelliJ/Gradle: %s\n' "$rel"
+  printf '(If IDEA is open: reload Gradle / Sync Project with Gradle Files.)\n'
+}
+
+norm_problem() {
+  printf '%s' "$1" | tr '[:lower:]' '[:upper:]'
+}
+
+infer_problem_dir_from_cwd() {
+  local d
+  if [[ "$(pwd -P)" =~ /contests/([^/]+)/([^/]+)$ ]]; then
+    d="$(pwd -P)"
+    [[ -f "$d/Main.java" ]] && echo "$d" && return 0
+  fi
+  return 1
+}
+
+problem_dir_or_die() {
+  local contest problem dir
+  if [[ $# -ge 2 ]]; then
+    contest="$1"
+    problem="$(norm_problem "$2")"
+    dir="$ROOT/contests/$contest/$problem"
+    [[ -f "$dir/Main.java" ]] || {
+      echo "error: missing $dir/Main.java" >&2
+      exit 1
+    }
+    echo "$dir"
+    return 0
+  fi
+
+  if dir="$(infer_problem_dir_from_cwd 2>/dev/null)"; then
+    echo "$dir"
+    return 0
+  fi
+
+  echo "error: pass <contest> <problem> or cd contests/<...>/<problem> with Main.java" >&2
+  exit 1
+}
+
+cmd_init() {
+  local contest problem dir url java readme
+  contest="${1:?contest}"
+  problem="$(norm_problem "${2:?problem}")"
+  dir="$ROOT/contests/$contest/$problem"
+  java="$dir/Main.java"
+  mkdir -p "$dir/samples"
+
+  if [[ -f "$java" ]]; then
+    echo "error: already exists: $java" >&2
+    exit 1
+  fi
+
+  sed \
+    -e "s/{{CONTEST}}/$(printf '%s' "$contest" | sed 's/[\\/&]/\\&/g')/g" \
+    -e "s/{{PROBLEM}}/$problem/g" \
+    "$TEMPLATE" >"$java"
+
+  if [[ "$contest" =~ [Gg][Yy][Mm][_-]?([0-9]+) ]]; then
+    local gid="${BASH_REMATCH[1]}"
+    url="https://codeforces.com/gym/${gid}/problem/${problem}"
+  elif [[ "$contest" =~ ^[0-9]+$ ]]; then
+    url="https://codeforces.com/contest/${contest}/problem/${problem}"
+  else
+    url="https://codeforces.com/problemset/problem/CONTEST_ID/${problem}  ← fill CONTEST_ID in browser"
+  fi
+
+  readme="$dir/README.md"
+  cat >"$readme" <<EOF
+# ${contest} · ${problem}
+
+Statement: <$url>
+
+## Local samples
+
+- Add \`samples/001.in\` (stdin)
+- Optionally add matching \`samples/001.out\` for automated diff checks
+
+Run (from repo root or this folder):
+
+\`\`\`bash
+$ROOT/bin/cf run ${contest} ${problem}
+# or cd here and run:
+$ROOT/bin/cf run
+\`\`\`
+
+## IntelliJ (debug breakpoints)
+
+Gradle only compiles **one** active folder at a time (so you do not get duplicate \`Main\` class errors):
+
+\`\`\`bash
+$ROOT/bin/cf use ${contest} ${problem}
+\`\`\`
+
+Then in IntelliJ: **Reload Gradle Project** → Gradle tool window → **Tasks → application → run** → **Debug** (bug icon).
+
+The Gradle \`run\` task redirects \`stdin\` from \`samples/001.in\` when that file exists (add paste from the statement).
+
+
+## Submit
+
+Upload \`Main.java\`: public class Main, single file, no \`package\` line unless the site's Java rules change.
+EOF
+
+  printf 'created:\n  %s\n  %s\n' "$java" "$readme"
+  cmd_use "$contest" "$problem"
+}
+
+run_one_sample() {
+  local prob_dir="$1"
+  local infile="$2"
+
+  local stem base want got tmp cwd
+  cwd="$(pwd -P)"
+
+  stem="$(basename "$infile")"
+  base="${stem%.*}"
+
+  cd "$prob_dir"
+  javac Main.java
+
+  tmp="$(mktemp)"
+  if ! java Main <"$infile" >"$tmp"; then
+    echo "error: java exited non-zero on $stem" >&2
+    rm -f "$tmp"
+    cd "$cwd"
+    return 1
+  fi
+
+  echo "--- sample: $stem ---"
+  sed 's/^/  /' "$infile" | sed '1s/^/stdin:\n/'
+  echo
+  echo "--- stdout ---"
+  sed 's/^/  /' "$tmp"
+  echo
+
+  if [[ -f "samples/${base}.out" ]]; then
+    want="$(sed 's/[[:cntrl:]]*$//' "samples/${base}.out")"
+    got="$(sed 's/[[:cntrl:]]*$//' "$tmp")"
+    if [[ "$got" != "$want" ]]; then
+      echo "FAIL: mismatched samples/${base}.out" >&2
+      diff -u "samples/${base}.out" "$tmp" >&2 || true
+      rm -f "$tmp"
+      cd "$cwd"
+      return 1
+    fi
+    echo "OK (matches samples/${base}.out)"
+  else
+    echo "(add samples/${base}.out for expected-output checking)"
+  fi
+
+  rm -f "$tmp"
+  cd "$cwd"
+  return 0
+}
+
+cmd_run() {
+  local all=0 prob_dir inputs failures
+  failures=0
+
+  if [[ "${1:-}" == "--all" ]]; then
+    all=1
+    shift || true
+  fi
+
+  prob_dir="$(problem_dir_or_die "$@")"
+  cd "$prob_dir"
+
+  inputs=()
+  while IFS= read -r infile; do
+    inputs+=("$infile")
+  done < <(
+    find samples -maxdepth 1 -type f \( -iname '*.in' -o -name '*.txt' \) \
+      ! -iname '*.out' ! -iname '*.expect' |
+      LC_ALL=C sort
+  )
+
+  if [[ ${#inputs[@]} -eq 0 ]]; then
+    echo "error: no stdin samples found in $prob_dir/samples (add *.in or *.txt)" >&2
+    exit 1
+  fi
+
+  if [[ "$all" -eq 1 ]]; then
+    for infile in "${inputs[@]}"; do
+      run_one_sample "$prob_dir" "$infile" || failures=$((failures + 1))
+    done
+    if [[ "$failures" -ne 0 ]]; then
+      echo "error: $failures failing sample(s)" >&2
+      exit 1
+    fi
+    return 0
+  fi
+
+  run_one_sample "$prob_dir" "${inputs[0]}"
+}
+
+cmd_path() {
+  local contest="$1" problem="$(norm_problem "$2")"
+  printf '%s\n' "$ROOT/contests/$contest/$problem/Main.java"
+}
+
+cmd_list() {
+  if ! command -v find >/dev/null; then
+    echo "find required" >&2
+    exit 1
+  fi
+
+  local f count
+  count=0
+  while IFS= read -r f; do
+    printf '%s\n' "$f"
+    count=$((count + 1))
+  done < <(find "$ROOT/contests" -type f -name Main.java 2>/dev/null | LC_ALL=C sort)
+
+  if [[ "$count" -eq 0 ]]; then
+    echo "(no contests yet; run cf init <contest> <problem>)"
+  fi
+}
+
+main() {
+  local cmd="${1:-}"
+  shift || true
+  case "$cmd" in
+    init) cmd_init "$@" ;;
+    use) cmd_use "$@" ;;
+    run) cmd_run "$@" ;;
+    path) cmd_path "${1:?contest}" "${2:?problem}" ;;
+    list) cmd_list ;;
+    help|-h|--help|"") usage ;;
+    *)
+      echo "unknown command: $cmd" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"
