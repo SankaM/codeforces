@@ -1,60 +1,181 @@
-# Codeforces — local Java workflow
+# Codeforces practice (Java)
 
-Practice rounds here with **submission-shaped** Java: one file `Main.java`, `public class Main`, **no `package` line** — what Codeforces accepts for Java uploads.
+You **already opened this project in IntelliJ**. Work through **Steps 1–7** once; after that, use the **checklist** at the bottom for each new problem.
 
-## Fastest loop (IntelliJ + one active problem)
+**Example:** contest **2230**, problem **C** — replace with your round number and letter (A, B, C, …).
 
-1. Open this folder (**must contain `build.gradle.kts`**) → trust Gradle → JDK **17**.
-2. Create + select a problem: `./bin/cf new 2230 C` (`new` ≡ `init`: scaffolds + runs `use` → updates `gradle.properties`).
-3. Load tests: Competitive Companion paste (see below), or **`pbpaste | ./bin/cf sample 2230 C`** → `samples/001.in`.
-4. **Toolbar → `CF: Gradle run` → Debug** (shared Gradle task). Stdin defaults to **`samples/001.in`** under the active `cf.problem.dir`. Override Gradle stdin: `./gradlew run -Pcf.stdin=samples/002.in`.
-5. `./bin/cf path 2230 C` gives the submission file.
+---
 
-Reuse another letter: `./bin/cf use 2230 D` → **Gradle reload** → same Debug config.
+## Step 1 — Terminal and the `cf` command
 
-Paste tests manually if you prefer: `samples/NNN.in` (+ optional `NNN.out` for `./bin/cf run … --all`).
+1. In IntelliJ: **View → Tool Windows → Terminal** (tab at the bottom).
+2. The terminal should already be inside this project. If not:
+   ```bash
+   cd path/to/codeforces
+   ```
+3. Run once per terminal session:
+   ```bash
+   source env.sh
+   ```
+4. Check it works:
+   ```bash
+   cf list
+   ```
 
-## Compared to typical setups
+**If you see `command not found`:** run `source env.sh` again, or use `./bin/cf` instead of `cf` (example: `./bin/cf new 2230 C`).
 
-| Approach | Strengths | Downsides vs here |
-|---------|-----------|---------------------|
-| **This repo (`bin/cf` + Gradle)** | No extra installs; **`Main.java`** always matches CF; one source root ⇒ **duplicate `Main` fixed**; **checked-in IntelliJ Gradle run entry** (`CF: Gradle run`); pipes for samples. | No auto-submit; no polygon from browser (paste or Companion text). |
-| **[cf-tool](https://github.com/xalanq/cf-tool)** (Go CLI) | Pull samples, local test, **submit** from terminal. | Another binary; still need your own **Java project layout** + duplicate-`Main` story if you compile many problems in one module. |
-| **AutoCp + [Competitive Companion](https://github.com/jmerle/competitive-companion)** (IntelliJ plugin) | One-click parse task + test UI from browser. | Plugin + extension; you still choose how to structure Java (often same “one class name” pain unless template matches). |
-| **KHelper** (Java/Kotlin helper) | Tight IntelliJ integration for CP. | Plugin install; opinionated template. |
+**Optional — every new terminal window:** add this line to `~/.zshrc` (use your real folder path):
 
-This repo **intentionally stays minimal**: shell + Gradle + optional Companion paste; you can add **cf-tool** or **AutoCp** later without conflict.
-
-## Helper commands
-
-```text
-cf new|init <contest> <problem>
-cf use <contest> <problem>
-cf sample <contest> <problem> [name]   # stdin → samples/[name] default 001.in
-cf run [--all] [<contest> <problem>]
-cf path <contest> <problem>
-cf list
+```bash
+source /path/to/codeforces/env.sh
 ```
 
-Optional: `alias cf="$PWD/bin/cf"`.
+---
 
-## Contest folder names
+## Step 2 — Create a problem folder
 
-**Numeric round** (`2072`) — README links to `https://codeforces.com/contest/2072/problem/A`.
+On Codeforces you are solving **2230C** (contest **2230**, letter **C**).
 
-**Gym** (`gym_102956` / `gym-102956`) — links to `…/gym/<id>/problem/<letter>`.
+In the terminal:
 
-Other slugs — placeholder link in per-problem `README.md`.
+```bash
+cf new 2230 C
+```
 
-## What you ship to Codeforces
+In the Project panel (left): **contests → 2230 → C → Main.java** — double-click to open.
 
-Only that folder’s `Main.java` (no `package`). Fast I/O: keep helpers **inline** in the same file.
+You should see:
 
-## Gradle / stdin details
+```
+contests/2230/C/
+  Main.java      ← write code here
+  samples/       ← test files here
+```
 
-- **`gradle.properties`**: **`cf.problem.dir=…`** — only directory compiled (avoids conflicting `Main` classes).
-- **`-Pcf.stdin=relative/path`** — path is **relative inside** `cf.problem.dir`, default **`samples/001.in`**.
+---
 
-## Cursor / VS Code
+## Step 3 — Copy sample tests from the problem page
 
-Run Task **Codeforces: run samples** (`./bin/cf run --all` with cwd = active file directory) — best when Gradle is not involved.
+On Codeforces, open the problem → find the **example** (input and output).
+
+1. Copy the **input** text.
+2. In IntelliJ: right-click **samples** → **New → File** → name **`001.in`** → paste → **Save**.
+3. Copy the **output** text.
+4. New file **`001.out`** → paste → **Save**.
+
+| What you copied on Codeforces | File to create |
+|------------------------------|----------------|
+| Example input | `contests/2230/C/samples/001.in` |
+| Example output | `contests/2230/C/samples/001.out` |
+
+**Mac:** after copying input on the website:
+
+```bash
+pbpaste | cf sample 2230 C
+```
+
+Then still create **`001.out`** by hand in IntelliJ.
+
+Add more tests later as `002.in` / `002.out`, etc.
+
+---
+
+## Step 4 — Run your program on the samples
+
+```bash
+cf run 2230 C --all
+```
+
+- **OK** — output matches `001.out` (and any other `.out` files).
+- **FAIL** — wrong answer; fix `Main.java` and run again.
+
+Run this command often while you code.
+
+---
+
+## Step 5 — Solve the problem in `Main.java`
+
+Edit **`contests/2230/C/Main.java`**.
+
+Rules for Codeforces:
+
+- Class name must be **`Main`**.
+- Do **not** put `package something;` at the top.
+- One file is enough — paste that same file when you submit.
+
+When you think you’re done:
+
+```bash
+cf run 2230 C --all
+```
+
+Keep editing until you see **OK**.
+
+---
+
+## Step 6 — Debug in IntelliJ (optional)
+
+1. Open **`Main.java`** for 2230 C.
+2. Click left of a line number → red **breakpoint**.
+3. Top bar: select **`CF: Gradle run`**.
+4. Click the **bug** icon (**Debug**).
+5. Program runs with input from **`samples/001.in`** and stops at your breakpoint. Press **F8** to step line by line.
+
+**Switching to another problem** (e.g. you worked on B and now want C):
+
+```bash
+cf use 2230 C
+```
+
+Then in IntelliJ: **Gradle** tool window → **Reload** (refresh icon). Debug again.
+
+---
+
+## Step 7 — Submit on Codeforces
+
+1. Browser: problem **2230C** → **Submit** → language **Java**.
+2. IntelliJ: open **`contests/2230/C/Main.java`** → select all (**Cmd+A**) → copy (**Cmd+C**).
+3. Paste into the submit box → **Submit**.
+
+To see the file location in the terminal:
+
+```bash
+cf path 2230 C
+```
+
+---
+
+## Next problem (same contest)
+
+| Goal | Command |
+|------|---------|
+| Start empty (new letter **D**) | `cf new 2230 D` |
+| Copy your Java style from **C** | `cf copy 2230 C 2230 D` |
+
+Then: new samples in `samples/`, edit `Main.java`, `cf run 2230 D --all`, submit `contests/2230/D/Main.java`.
+
+---
+
+## Checklist (every problem)
+
+1. `cf new <contest> <letter>` or `cf copy …`
+2. `samples/001.in` + `001.out` from the statement
+3. `cf run <contest> <letter> --all` until **OK**
+4. Debug with **CF: Gradle run** if needed
+5. Submit **`Main.java`** on Codeforces
+
+---
+
+## All commands (swap 2230 / C for yours)
+
+```bash
+cf new 2230 C
+cf copy 2230 C 2230 D
+cf use 2230 C
+cf run 2230 C --all
+cf path 2230 C
+cf list
+pbpaste | cf sample 2230 C
+```
+
+If `cf` does not work, use `./bin/cf` (e.g. `./bin/cf run 2230 C --all`).

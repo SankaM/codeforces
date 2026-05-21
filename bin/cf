@@ -9,6 +9,7 @@ usage() {
 Usage:
   cf init <contest> <problem>          Create contests/<contest>/<problem>/ with Main.java + samples/.
   cf new <contest> <problem>           Same as cf init …
+  cf copy <from_c> <from_p> <to_c> <to_p>   Copy an existing problem folder (template + samples layout); runs cf use on destination.
   cf use <contest> <problem>           Point IntelliJ Gradle (gradle.properties cf.problem.dir) at one problem folder.
   cf run [--all] [<contest> <problem>] Compile Main.java; run stdin from samples/*.in.
   cf sample <contest> <problem> [name] Pipe stdin → samples/[name]; default file is 001.in (e.g. pbpaste | …).
@@ -27,6 +28,7 @@ Tips:
 
 Examples:
   bin/cf init 2072 A                  # also runs: cf use 2072 A
+  bin/cf copy 2230 C 2230 D           # duplicate folder; then edit Main.java + samples
   pbpaste | bin/cf sample 2072 A      # macOS: clipboard → samples/001.in
   bin/cf use 2072 B
   cd contests/2072/A && ../../../bin/cf run --all
@@ -189,6 +191,33 @@ EOF
   cmd_use "$contest" "$problem"
 }
 
+cmd_copy() {
+  local fc fp tc tp src dst
+  fc="${1:?from contest}"
+  fp="$(norm_problem "${2:?from problem}")"
+  tc="${3:?to contest}"
+  tp="$(norm_problem "${4:?to problem}")"
+  src="$ROOT/contests/$fc/$fp"
+  dst="$ROOT/contests/$tc/$tp"
+
+  [[ -d "$src" && -f "$src/Main.java" ]] || {
+    echo "error: source missing: $src/Main.java" >&2
+    exit 1
+  }
+  if [[ -e "$dst" ]]; then
+    echo "error: destination already exists: $dst" >&2
+    exit 1
+  fi
+
+  mkdir -p "$(dirname "$dst")"
+  cp -R "$src" "$dst"
+  find "$dst" -name '*.class' -delete 2>/dev/null || true
+
+  printf 'copied:\n  %s\n  → %s\n' "$src" "$dst"
+  printf 'edit Main.java and replace samples/*.in (and *.out); then cf run %s %s --all\n' "$tc" "$tp"
+  cmd_use "$tc" "$tp"
+}
+
 run_one_sample() {
   local prob_dir="$1"
   local infile="$2"
@@ -305,6 +334,7 @@ main() {
   shift || true
   case "$cmd" in
     init | new) cmd_init "$@" ;;
+    copy) cmd_copy "$@" ;;
     use) cmd_use "$@" ;;
     sample) cmd_sample "$@" ;;
     run) cmd_run "$@" ;;
