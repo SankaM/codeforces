@@ -2,95 +2,59 @@
 
 Practice rounds here with **submission-shaped** Java: one file `Main.java`, `public class Main`, **no `package` line** — what Codeforces accepts for Java uploads.
 
-## Quick start
+## Fastest loop (IntelliJ + one active problem)
 
-From this repo root:
+1. Open this folder (**must contain `build.gradle.kts`**) → trust Gradle → JDK **17**.
+2. Create + select a problem: `./bin/cf new 2230 C` (`new` ≡ `init`: scaffolds + runs `use` → updates `gradle.properties`).
+3. Load tests: Competitive Companion paste (see below), or **`pbpaste | ./bin/cf sample 2230 C`** → `samples/001.in`.
+4. **Toolbar → `CF: Gradle run` → Debug** (shared Gradle task). Stdin defaults to **`samples/001.in`** under the active `cf.problem.dir`. Override Gradle stdin: `./gradlew run -Pcf.stdin=samples/002.in`.
+5. `./bin/cf path 2230 C` gives the submission file.
 
-```bash
-./bin/cf init 2072 A
-```
+Reuse another letter: `./bin/cf use 2230 D` → **Gradle reload** → same Debug config.
 
-That creates `contests/2072/A/Main.java`, `samples/`, and `README.md` with a plausible statement link pattern, updates **`gradle.properties`** for IntelliJ, and selects that folder as Gradle’s sole source root (`cf use`).
+Paste tests manually if you prefer: `samples/NNN.in` (+ optional `NNN.out` for `./bin/cf run … --all`).
 
-Paste tests from the problem into:
+## Compared to typical setups
 
-- `contests/<round>/<problem>/samples/NNN.in` — stdin replay
-- `contests/<round>/<problem>/samples/NNN.out` — optional; if present, `cf run` diffs stdout
+| Approach | Strengths | Downsides vs here |
+|---------|-----------|---------------------|
+| **This repo (`bin/cf` + Gradle)** | No extra installs; **`Main.java`** always matches CF; one source root ⇒ **duplicate `Main` fixed**; **checked-in IntelliJ Gradle run entry** (`CF: Gradle run`); pipes for samples. | No auto-submit; no polygon from browser (paste or Companion text). |
+| **[cf-tool](https://github.com/xalanq/cf-tool)** (Go CLI) | Pull samples, local test, **submit** from terminal. | Another binary; still need your own **Java project layout** + duplicate-`Main` story if you compile many problems in one module. |
+| **AutoCp + [Competitive Companion](https://github.com/jmerle/competitive-companion)** (IntelliJ plugin) | One-click parse task + test UI from browser. | Plugin + extension; you still choose how to structure Java (often same “one class name” pain unless template matches). |
+| **KHelper** (Java/Kotlin helper) | Tight IntelliJ integration for CP. | Plugin install; opinionated template. |
 
-Compile + run locally:
-
-```bash
-./bin/cf run 2072 A          # default: first stdin sample only
-./bin/cf run 2072 A --all    # run every *.in / *.txt in samples/
-
-# convenience: cd into the problem folder
-cd contests/2072/A && ../../../bin/cf run --all
-```
-
-Locate the submission file for copy–paste:
-
-```bash
-./bin/cf path 2072 A
-```
-
-## Contest folder names
-
-**Numeric round** (`2072`) — README links to `https://codeforces.com/contest/2072/problem/A`.
-
-**Gym** (`gym_102956` / `gym-102956` / similar) — links to `…/gym/<id>/problem/<letter>`.
-
-Anything else (`edu-round-xyz`) — README uses a placeholder link; swap in the real URL when you browse the site.
-
-## What you ship to Codeforces
-
-Only `Main.java` from the problem folder, unless rules change:
-
-- Filename / class **`Main`** — standard CF Java submissions.
-- Do **not** add `package`; keep a single top-level `public class Main`.
-
-Fast I/O: if you hit TLE with `BufferedReader` / `PrintWriter`, add your usual tokenizer or custom reader **inline** in `Main.java` (still one file).
+This repo **intentionally stays minimal**: shell + Gradle + optional Companion paste; you can add **cf-tool** or **AutoCp** later without conflict.
 
 ## Helper commands
 
 ```text
-cf init <contest> <problem>
-cf use <contest> <problem>        # IntelliJ/Gradle active source folder
+cf new|init <contest> <problem>
+cf use <contest> <problem>
+cf sample <contest> <problem> [name]   # stdin → samples/[name] default 001.in
 cf run [--all] [<contest> <problem>]
 cf path <contest> <problem>
 cf list
 ```
 
-Optional: `alias cf="$PWD/bin/cf"` in your shell if you prefer `cf` everywhere.
+Optional: `alias cf="$PWD/bin/cf"`.
 
-## IntelliJ IDEA (debug with breakpoints)
+## Contest folder names
 
-This repo is a **Gradle** Java app so IntelliJ compiles exactly **one** `Main.java` at a time (each problem uses the same class name, which breaks true multi-root “compile everything” layouts).
+**Numeric round** (`2072`) — README links to `https://codeforces.com/contest/2072/problem/A`.
 
-### First open
+**Gym** (`gym_102956` / `gym-102956`) — links to `…/gym/<id>/problem/<letter>`.
 
-- **File → Open…** → select the **`codeforces`** checkout folder (must contain `build.gradle.kts`).
-- Import/trust the Gradle project. JDK **17** matches the Gradle toolchain.
+Other slugs — placeholder link in per-problem `README.md`.
 
-### Switch problems (`cf use`)
+## What you ship to Codeforces
 
-```bash
-./bin/cf use 2072 A
-```
+Only that folder’s `Main.java` (no `package`). Fast I/O: keep helpers **inline** in the same file.
 
-This writes **`gradle.properties`** → **`cf.problem.dir=contests/2072/A`**. In IntelliJ, **Sync / Reload Gradle Project** so indexes and the active sources update.
+## Gradle / stdin details
 
-Then open that folder’s **`Main.java`** for breakpoints.
-
-### Debug `Main`
-
-Gradle tool window → **`Tasks` → `application` → `run`** → right-click → **Debug**.
-
-The Gradle **`run`** task reads **`stdin`** from **`samples/001.in`** when present (paste a statement sample there for realistic debugging).
-
-Tip: `./bin/cf init …` runs **`cf use`** automatically for the new folder.
+- **`gradle.properties`**: **`cf.problem.dir=…`** — only directory compiled (avoids conflicting `Main` classes).
+- **`-Pcf.stdin=relative/path`** — path is **relative inside** `cf.problem.dir`, default **`samples/001.in`**.
 
 ## Cursor / VS Code
 
-Open **this repo** (`codeforces`) as the workspace root.
-
-With `Main.java` focused under some `contests/…/<problem>/`, run **Terminal → Run Task… → Codeforces: run samples** to execute `./bin/cf run --all` with the working directory set to that Java file’s folder.
+Run Task **Codeforces: run samples** (`./bin/cf run --all` with cwd = active file directory) — best when Gradle is not involved.

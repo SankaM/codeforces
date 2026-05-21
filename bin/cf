@@ -8,8 +8,10 @@ usage() {
   cat <<'EOF'
 Usage:
   cf init <contest> <problem>          Create contests/<contest>/<problem>/ with Main.java + samples/.
+  cf new <contest> <problem>           Same as cf init …
   cf use <contest> <problem>           Point IntelliJ Gradle (gradle.properties cf.problem.dir) at one problem folder.
   cf run [--all] [<contest> <problem>] Compile Main.java; run stdin from samples/*.in.
+  cf sample <contest> <problem> [name] Pipe stdin → samples/[name]; default file is 001.in (e.g. pbpaste | …).
   cf path <contest> <problem>          Print absolute path to submission Main.java.
   cf list                              Tree of contests/*/ */Main.java paths.
 
@@ -17,13 +19,15 @@ Contest: round id (2072), gym id, or a slug folder name (edu-169-abc).
 Problem: A,B,C,... (case-insensitive).
 
 Tips:
-  - Gradle/IntelliJ only compile one folder at a time — run ./bin/cf use … when you switch problems (init does use automatically).
+  - Gradle/IntelliJ compile one folder at a time — run ./bin/cf use … when you switch problems (init does use automatically).
+  - Toolbar/Debug: shared **CF: Gradle run** uses stdin from Gradle property cf.stdin relative to cf.problem.dir (defaults to samples/001.in — override ./gradlew run -Pcf.stdin=samples/other.in).
   - Paste samples into samples/*.in (+ optional matching *.out for diff).
   - From a problem directory, omit <contest> <problem>; cf infers cwd.
   - Submission on site: paste/upload Main.java (no package line, class Main).
 
 Examples:
-  bin/cf init 2072 A                  # also runs: bin/cf use 2072 A
+  bin/cf init 2072 A                  # also runs: cf use 2072 A
+  pbpaste | bin/cf sample 2072 A      # macOS: clipboard → samples/001.in
   bin/cf use 2072 B
   cd contests/2072/A && ../../../bin/cf run --all
 EOF
@@ -62,7 +66,23 @@ cmd_use() {
   }
   gradle_property_set "cf.problem.dir" "$rel"
   printf 'active for IntelliJ/Gradle: %s\n' "$rel"
-  printf '(If IDEA is open: reload Gradle / Sync Project with Gradle Files.)\n'
+  printf '(Reload Gradle sync in IDEA — or Toolbar → CF: Gradle run debugs stdin from samples/001.in.)\n'
+}
+
+cmd_sample() {
+  local contest problem fname rel dir
+  contest="${1:?contest}"
+  problem="$(norm_problem "${2:?problem}")"
+  fname="${3:-001.in}"
+  rel="contests/$contest/$problem"
+  dir="$ROOT/$rel/samples"
+  [[ -f "$ROOT/$rel/Main.java" ]] || {
+    echo "error: missing $ROOT/$rel/Main.java" >&2
+    exit 1
+  }
+  mkdir -p "$dir"
+  cat >"$dir/$fname"
+  printf 'wrote %s\n' "$dir/$fname"
 }
 
 norm_problem() {
@@ -155,9 +175,9 @@ Gradle only compiles **one** active folder at a time (so you do not get duplicat
 $ROOT/bin/cf use ${contest} ${problem}
 \`\`\`
 
-Then in IntelliJ: **Reload Gradle Project** → Gradle tool window → **Tasks → application → run** → **Debug** (bug icon).
+Then in IntelliJ: **Reload Gradle Project** → use run configuration **CF: Gradle run** from the toolbar → **Debug**, or Gradle tool window → **Tasks → application → run** → **Debug**.
 
-The Gradle \`run\` task redirects \`stdin\` from \`samples/001.in\` when that file exists (add paste from the statement).
+The Gradle \`run\` task reads stdin from \`samples/001.in\` by default (override: \`./gradlew run -Pcf.stdin=…\`): \`samples/OTHER.in\` under the active problem folder (\`gradle.properties cf.problem.dir\`).
 
 
 ## Submit
@@ -284,8 +304,9 @@ main() {
   local cmd="${1:-}"
   shift || true
   case "$cmd" in
-    init) cmd_init "$@" ;;
+    init | new) cmd_init "$@" ;;
     use) cmd_use "$@" ;;
+    sample) cmd_sample "$@" ;;
     run) cmd_run "$@" ;;
     path) cmd_path "${1:?contest}" "${2:?problem}" ;;
     list) cmd_list ;;
